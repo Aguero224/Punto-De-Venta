@@ -14,6 +14,7 @@ class DetalleVenta extends Model
     protected $fillable = [
         'venta_id',
         'producto_id',
+        'producto_nombre',
         'cantidad',
         'precio_unitario',
         'subtotal',

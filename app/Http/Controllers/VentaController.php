@@ -30,11 +30,12 @@ class VentaController extends Controller
     {
         // cliente_id => required
         $request->validate([
-            'cliente_id' => 'required|exists:clientes,id',
-            'productos' => 'required|array', 
+            'cliente_id' => 'nullable|exists:clientes,id',
+            'productos'  => 'required|array',
             'productos.*.id' => 'required|exists:productos,id',
             'productos.*.cantidad' => 'required|integer|min:1',
         ]);
+        
 
         DB::transaction(function() use ($request) {
             $venta = Venta::create([
@@ -47,24 +48,26 @@ class VentaController extends Controller
             foreach($request->productos as $item) {
                 $producto = Producto::findOrFail($item['id']);
                 $cantidadVendida = $item['cantidad'];
-
+            
                 if ($producto->cantidad < $cantidadVendida) {
                     throw new \Exception("Stock insuficiente para {$producto->nombre}");
                 }
-
+            
                 $producto->cantidad -= $cantidadVendida;
                 $producto->save();
-
+            
                 $subtotal = $producto->precio_venta * $cantidadVendida;
                 $total += $subtotal;
-
+            
                 DetalleVenta::create([
-                    'venta_id' => $venta->id,
-                    'producto_id' => $producto->id,
-                    'cantidad' => $cantidadVendida,
+                    'venta_id'        => $venta->id,
+                    'producto_id'     => $producto->id,
+                    'producto_nombre' => $producto->nombre, 
+                    'cantidad'        => $cantidadVendida,
                     'precio_unitario' => $producto->precio_venta,
-                    'subtotal' => $subtotal,
+                    'subtotal'        => $subtotal,
                 ]);
+                
             }
 
             $venta->update(['total' => $total]);

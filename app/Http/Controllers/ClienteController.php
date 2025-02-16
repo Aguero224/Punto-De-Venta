@@ -111,4 +111,11 @@ class ClienteController extends Controller
     ]);
 }
 
+public function historial($id)
+{
+    $cliente = Cliente::with('ventas.detalles.producto')->findOrFail($id);
+    return response()->json($cliente->ventas);
+}
+
+
 }

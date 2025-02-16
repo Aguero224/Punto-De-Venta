@@ -37,17 +37,26 @@ export default function Index({ auth, proveedores }) {
     function handleSubmit(e) {
         e.preventDefault();
         if (form.id) {
-            Inertia.put(`/proveedores/${form.id}`, form, {
-                onSuccess: () => setShowModal(false),
-                onError: () => {},
-            });
+          Inertia.put(`/proveedores/${form.id}`, form, {
+            onSuccess: () => {
+              setShowModal(false);
+              window.location.href = '/proveedores';
+            },
+            onError: () => {},
+          });
         } else {
-            Inertia.post(`/proveedores`, form, {
-                onSuccess: () => setShowModal(false),
-                onError: () => {},
-            });
+          Inertia.post('/proveedores', form, {
+            onSuccess: () => {
+              setShowModal(false);
+              window.location.href = '/proveedores';
+            },
+            onError: () => {},
+          });
         }
-    }
+      }
+      
+      
+      
 
     const dataList = proveedores?.data ?? [];
 
