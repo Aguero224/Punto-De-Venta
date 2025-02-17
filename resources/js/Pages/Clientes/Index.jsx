@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, usePage, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/Components/Modal';
@@ -8,6 +8,10 @@ export default function Index({ auth, clientes }) {
   const { errors } = usePage().props;
   const [clientErrors, setClientErrors] = useState({});
   const [showModal, setShowModal] = useState(false);
+  const [showHistorial, setShowHistorial] = useState(false);
+  const [historialData, setHistorialData] = useState([]);
+  
+  // Estado para el formulario de creación/edición
   const [form, setForm] = useState({
     id: null,
     nombre: '',
@@ -17,10 +21,24 @@ export default function Index({ auth, clientes }) {
     password: '',
     password_confirmation: '',
   });
+  
+  // Estado para la búsqueda
+  const [search, setSearch] = useState('');
+  const [filteredClients, setFilteredClients] = useState(clientes.data || []);
 
-  const [showHistorial, setShowHistorial] = useState(false);
-  const [historialData, setHistorialData] = useState([]);
+  // Efecto para filtrar clientes por ID, Nombre o Email
+  useEffect(() => {
+    const term = search.toLowerCase();
+    const filtered = (clientes.data || []).filter(client => {
+      const idMatch = client.id.toString().includes(term);
+      const nombreMatch = client.nombre.toLowerCase().includes(term);
+      const emailMatch = client.user && client.user.email.toLowerCase().includes(term);
+      return idMatch || nombreMatch || emailMatch;
+    });
+    setFilteredClients(filtered);
+  }, [search, clientes.data]);
 
+  // Abre el modal en modo crear
   const openCreate = () => {
     setForm({
       id: null,
@@ -35,6 +53,7 @@ export default function Index({ auth, clientes }) {
     setShowModal(true);
   };
 
+  // Abre el modal en modo editar
   const openEdit = (cliente) => {
     setForm({
       id: cliente.id,
@@ -49,11 +68,12 @@ export default function Index({ auth, clientes }) {
     setShowModal(true);
   };
 
+  // Cierra el modal
   const closeModal = () => setShowModal(false);
 
+  // Abre el modal de historial
   const openHistorialModal = (clientId) => {
-    axios
-      .get(`/clientes/${clientId}/historial`)
+    axios.get(`/clientes/${clientId}/historial`)
       .then((response) => {
         setHistorialData(response.data);
         setShowHistorial(true);
@@ -68,11 +88,11 @@ export default function Index({ auth, clientes }) {
     setHistorialData([]);
   };
 
+  // Manejo del envío del formulario (creación o edición)
   const handleSubmit = (e) => {
     e.preventDefault();
     let errorsLocal = {};
 
-    // Validación de campos obligatorios
     if (!form.nombre.trim()) {
       errorsLocal.nombre = "El nombre es obligatorio.";
     }
@@ -88,8 +108,7 @@ export default function Index({ auth, clientes }) {
     } else if (form.telefono.length > 15) {
       errorsLocal.telefono = "El teléfono no puede tener más de 15 dígitos.";
     }
-    // Validación de email y password en creación (en edición son opcionales)
-    if (!form.id) {
+    if (!form.id) { // Creación
       if (!form.email.trim()) {
         errorsLocal.email = "El email es obligatorio.";
       }
@@ -99,15 +118,8 @@ export default function Index({ auth, clientes }) {
       if (form.password !== form.password_confirmation) {
         errorsLocal.password_confirmation = "Las contraseñas no coinciden.";
       }
-    } else {
-      if (form.password.trim() && form.password !== form.password_confirmation) {
-        errorsLocal.password_confirmation = "Las contraseñas no coinciden.";
-      }
-    }
-
-    // Validación de nombre duplicado (excluyendo el actual en edición)
-    const allClients = clientes.data || [];
-    if (!form.id) {
+      // Validación de duplicado (nombre y email)
+      const allClients = clientes.data || [];
       const duplicateNombre = allClients.find(
         (c) => c.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
       );
@@ -120,21 +132,20 @@ export default function Index({ auth, clientes }) {
       if (duplicateEmail) {
         errorsLocal.email = "El email ya está registrado, por favor use otro.";
       }
-    } else {
+    } else { // Edición
+      if (form.password.trim() && form.password !== form.password_confirmation) {
+        errorsLocal.password_confirmation = "Las contraseñas no coinciden.";
+      }
+      const allClients = clientes.data || [];
       const duplicateNombre = allClients.find(
-        (c) =>
-          c.id !== form.id &&
-          c.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
+        (c) => c.id !== form.id && c.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
       );
       if (duplicateNombre) {
         errorsLocal.nombre = "Ya existe un cliente con este nombre.";
       }
       if (form.email.trim()) {
         const duplicateEmail = allClients.find(
-          (c) =>
-            c.id !== form.id &&
-            c.user &&
-            c.user.email.toLowerCase() === form.email.trim().toLowerCase()
+          (c) => c.id !== form.id && c.user && c.user.email.toLowerCase() === form.email.trim().toLowerCase()
         );
         if (duplicateEmail) {
           errorsLocal.email = "El email ya está registrado, por favor use otro.";
@@ -149,7 +160,7 @@ export default function Index({ auth, clientes }) {
       setClientErrors({});
     }
 
-    // Envío de datos con router
+    // Envío de datos: creación o actualización
     if (form.id) {
       router.put(`/clientes/${form.id}`, form, {
         onSuccess: (page) => {
@@ -171,20 +182,30 @@ export default function Index({ auth, clientes }) {
     }
   };
 
-  const dataList = clientes?.data || [];
+  const dataList = clientes.data || [];
 
   return (
     <AuthenticatedLayout header={<h2 className="text-2xl font-bold text-gray-800">Clientes</h2>}>
       <Head title="Clientes" />
+
       <div className="p-6">
-        <div className="flex justify-end mb-6">
+        {/* Barra de búsqueda */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 space-y-4 md:space-y-0">
+          <input
+            type="text"
+            placeholder="Buscar por ID, Nombre o Email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full max-w-md border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
           <button
             onClick={openCreate}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition-colors"
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow"
           >
             Crear Cliente
           </button>
         </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white rounded-lg shadow">
             <thead className="bg-gray-200">
@@ -196,7 +217,7 @@ export default function Index({ auth, clientes }) {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {dataList.map((cli) => (
+              {filteredClients.map((cli) => (
                 <tr key={cli.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{cli.id}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{cli.nombre}</td>
@@ -204,7 +225,10 @@ export default function Index({ auth, clientes }) {
                     {cli.user ? cli.user.email : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                    <button onClick={() => openEdit(cli)} className="text-green-500 hover:underline mr-2">
+                    <button
+                      onClick={() => openEdit(cli)}
+                      className="text-green-500 hover:underline mr-2"
+                    >
                       Editar
                     </button>
                     <Link
@@ -215,7 +239,10 @@ export default function Index({ auth, clientes }) {
                     >
                       Eliminar
                     </Link>
-                    <button onClick={() => openHistorialModal(cli.id)} className="text-blue-500 hover:underline">
+                    <button
+                      onClick={() => openHistorialModal(cli.id)}
+                      className="text-blue-500 hover:underline"
+                    >
                       Historial
                     </button>
                   </td>
@@ -244,7 +271,6 @@ export default function Index({ auth, clientes }) {
         )}
       </div>
 
-      {/* Modal para Crear/Editar Cliente */}
       <Modal
         title={form.id ? 'Editar Cliente - Credenciales de usuario (Opcional)' : 'Crear Cliente'}
         isOpen={showModal}
@@ -260,7 +286,9 @@ export default function Index({ auth, clientes }) {
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             />
             {(clientErrors.nombre || errors.nombre) && (
-              <p className="mt-1 text-sm text-red-500">{clientErrors.nombre || errors.nombre}</p>
+              <p className="mt-1 text-sm text-red-500">
+                {clientErrors.nombre || errors.nombre}
+              </p>
             )}
           </div>
           <div>
@@ -272,7 +300,9 @@ export default function Index({ auth, clientes }) {
               onChange={(e) => setForm({ ...form, direccion: e.target.value })}
             />
             {(clientErrors.direccion || errors.direccion) && (
-              <p className="mt-1 text-sm text-red-500">{clientErrors.direccion || errors.direccion}</p>
+              <p className="mt-1 text-sm text-red-500">
+                {clientErrors.direccion || errors.direccion}
+              </p>
             )}
           </div>
           <div>
@@ -289,7 +319,9 @@ export default function Index({ auth, clientes }) {
               }}
             />
             {(clientErrors.telefono || errors.telefono) && (
-              <p className="mt-1 text-sm text-red-500">{clientErrors.telefono || errors.telefono}</p>
+              <p className="mt-1 text-sm text-red-500">
+                {clientErrors.telefono || errors.telefono}
+              </p>
             )}
           </div>
           <div>
@@ -301,7 +333,9 @@ export default function Index({ auth, clientes }) {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
             {(clientErrors.email || errors.email) && (
-              <p className="mt-1 text-sm text-red-500">{clientErrors.email || errors.email}</p>
+              <p className="mt-1 text-sm text-red-500">
+                {clientErrors.email || errors.email}
+              </p>
             )}
           </div>
           <div>
@@ -313,7 +347,9 @@ export default function Index({ auth, clientes }) {
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
             {(clientErrors.password || errors.password) && (
-              <p className="mt-1 text-sm text-red-500">{clientErrors.password || errors.password}</p>
+              <p className="mt-1 text-sm text-red-500">
+                {clientErrors.password || errors.password}
+              </p>
             )}
           </div>
           <div>
@@ -339,7 +375,6 @@ export default function Index({ auth, clientes }) {
           </div>
         </form>
       </Modal>
-
       {/* Modal de Historial de Compras */}
       <Modal title="Historial de Compras" isOpen={showHistorial} onClose={closeHistorialModal}>
         {historialData && historialData.length > 0 ? (

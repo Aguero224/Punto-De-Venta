@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, usePage, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/Components/Modal';
@@ -7,12 +7,27 @@ export default function Index() {
   const { proveedores, errors } = usePage().props;
   const [clientErrors, setClientErrors] = useState({});
   const [showModal, setShowModal] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filteredProviders, setFilteredProviders] = useState(proveedores.data || []);
+
+  // Estado del formulario para crear/editar proveedor
   const [form, setForm] = useState({
     id: null,
     nombre: '',
     direccion: '',
     telefono: '',
   });
+
+  // Efecto para filtrar proveedores por ID y Nombre cuando cambia el input de búsqueda
+  useEffect(() => {
+    const term = search.toLowerCase();
+    const filtered = (proveedores.data || []).filter((prov) => {
+      const idMatch = prov.id.toString().includes(term);
+      const nombreMatch = prov.nombre.toLowerCase().includes(term);
+      return idMatch || nombreMatch;
+    });
+    setFilteredProviders(filtered);
+  }, [search, proveedores.data]);
 
   // Abre el modal para crear un proveedor
   function openCreate() {
@@ -43,7 +58,7 @@ export default function Index() {
     e.preventDefault();
     let errorsLocal = {};
 
-    // Validaciones obligatorias
+    // Validación de campos obligatorios
     if (!form.nombre.trim()) {
       errorsLocal.nombre = "El nombre es obligatorio.";
     }
@@ -85,7 +100,7 @@ export default function Index() {
       setClientErrors({});
     }
 
-    // Envío de datos: actualización o creación
+    // Envío de datos (creación o edición)
     if (form.id) {
       router.put(`/proveedores/${form.id}`, form, {
         onSuccess: (page) => {
@@ -109,17 +124,25 @@ export default function Index() {
     }
   }
 
-  const dataList = proveedores?.data || [];
+  const dataList = proveedores.data || [];
 
   return (
     <AuthenticatedLayout header={<h2 className="font-semibold text-2xl text-gray-800 leading-tight">Proveedores</h2>}>
       <Head title="Proveedores" />
 
       <div className="p-6">
-        <div className="flex justify-end mb-6">
+        {/* Barra de búsqueda moderna */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 space-y-4 md:space-y-0">
+          <input
+            type="text"
+            placeholder="Buscar por ID o Nombre..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full max-w-md border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
           <button
             onClick={openCreate}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition-colors"
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow"
           >
             Crear Proveedor
           </button>
@@ -137,7 +160,7 @@ export default function Index() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {dataList.map((prov) => (
+              {filteredProviders.map((prov) => (
                 <tr key={prov.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{prov.id}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{prov.nombre}</td>

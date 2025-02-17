@@ -5,6 +5,7 @@ import Modal from '@/Components/Modal';
 
 export default function Index() {
   const { productos, proveedores, errors } = usePage().props;
+  const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -21,7 +22,22 @@ export default function Index() {
     proveedor_id: '',
   });
 
-  // Abre modal para crear
+  // Filtrado único: se filtra la lista de productos por nombre, id o proveedor
+  const filteredProducts =
+    productos?.data.filter((prod) => {
+      const searchTerm = search.toLowerCase();
+      const idMatch = prod.id.toString().includes(search);
+      const nameMatch = prod.nombre.toLowerCase().includes(searchTerm);
+      const providerMatch = prod.proveedor
+        ? prod.proveedor.nombre.toLowerCase().includes(searchTerm)
+        : false;
+      return idMatch || nameMatch || providerMatch;
+    }) || [];
+
+  const handleSearch = (e) => {
+    setSearch(e.target.value);
+  };
+
   const openCreate = () => {
     setEditing(false);
     setForm({
@@ -36,7 +52,6 @@ export default function Index() {
     setShowModal(true);
   };
 
-  // Abre modal para editar
   const openEdit = (prod) => {
     setEditing(true);
     setForm({
@@ -51,7 +66,6 @@ export default function Index() {
     setShowModal(true);
   };
 
-  // Abre modal para ver detalle sin redirigir
   const openView = (prod) => {
     setViewProduct(prod);
     setShowViewModal(true);
@@ -85,12 +99,13 @@ export default function Index() {
       form.precio_venta !== '' &&
       Number(form.precio_venta) < Number(form.costo_adquisicion)
     ) {
-      errorsLocal.precio_venta = "El precio de venta debe ser mayor o igual al costo de adquisición.";
+      errorsLocal.precio_venta =
+        "El precio de venta debe ser mayor o igual al costo de adquisición.";
     }
 
-    // Validación de nombre duplicado (en creación o edición)
+    // Validación de nombre duplicado
     const allProducts = productos?.data || [];
-    if (!form.id) { // creación
+    if (!form.id) {
       const duplicate = allProducts.find(
         (p) => p.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
       );
@@ -99,7 +114,9 @@ export default function Index() {
       }
     } else {
       const duplicate = allProducts.find(
-        (p) => p.id !== form.id && p.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
+        (p) =>
+          p.id !== form.id &&
+          p.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
       );
       if (duplicate) {
         errorsLocal.nombre = "Ya existe un producto con este nombre.";
@@ -113,7 +130,7 @@ export default function Index() {
       setClientErrors({});
     }
 
-    // Envío de formulario (creación o edición)
+    // Envío de datos (creación o edición)
     if (form.id) {
       router.put(`/productos/${form.id}`, form, {
         onSuccess: () => {
@@ -131,20 +148,27 @@ export default function Index() {
     }
   };
 
-  const dataList = productos?.data || [];
-
   return (
     <AuthenticatedLayout header={<h2 className="text-2xl font-bold text-gray-800">Productos</h2>}>
       <Head title="Productos" />
+
       <div className="p-6">
-        <div className="flex justify-end mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 space-y-4 md:space-y-0">
+          <input
+            type="text"
+            placeholder="Buscar por ID, Nombre o Proveedor..."
+            value={search}
+            onChange={handleSearch}
+            className="w-full max-w-md border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
           <button 
             onClick={openCreate} 
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow"
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow mt-2 md:mt-0"
           >
             Crear Producto
           </button>
         </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white rounded-lg shadow">
             <thead className="bg-gray-200">
@@ -156,7 +180,7 @@ export default function Index() {
               </tr>
             </thead>
             <tbody>
-              {dataList.map((prod) => (
+              {filteredProducts.map((prod) => (
                 <tr key={prod.id} className="hover:bg-gray-50">
                   <td className="px-6 py-3 border-b text-sm text-gray-800">{prod.id}</td>
                   <td className="px-6 py-3 border-b text-sm text-gray-800">{prod.nombre}</td>
@@ -184,11 +208,15 @@ export default function Index() {
             </tbody>
           </table>
         </div>
+
         {/* Paginación */}
         {productos.links && Array.isArray(productos.links) && (
           <div className="mt-6 flex justify-center space-x-2">
             {productos.links.map((link, index) => (
-              <span key={index} className={`${link.active ? 'font-bold text-blue-600' : 'text-gray-600'} px-3 py-1 border rounded hover:bg-gray-100`}>
+              <span
+                key={index}
+                className={`${link.active ? 'font-bold text-blue-600' : 'text-gray-600'} px-3 py-1 border rounded hover:bg-gray-100`}
+              >
                 {link.url ? (
                   <Link href={link.url} dangerouslySetInnerHTML={{ __html: link.label }} />
                 ) : (
@@ -199,6 +227,7 @@ export default function Index() {
           </div>
         )}
       </div>
+
       {/* Modal de Crear/Editar Producto */}
       <Modal title={editing ? 'Editar Producto' : 'Crear Producto'} isOpen={showModal} onClose={closeModal}>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -206,7 +235,7 @@ export default function Index() {
             <label className="block mb-1 font-semibold">Nombre</label>
             <input
               type="text"
-              className="w-full border px-3 py-2 rounded"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             />
@@ -218,7 +247,7 @@ export default function Index() {
             <label className="block mb-1 font-semibold">Cantidad</label>
             <input
               type="number"
-              className="w-full border px-3 py-2 rounded"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
               value={form.cantidad}
               onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
             />
@@ -231,7 +260,7 @@ export default function Index() {
             <input
               type="number"
               step="0.01"
-              className="w-full border px-3 py-2 rounded"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
               value={form.costo_adquisicion}
               onChange={(e) => setForm({ ...form, costo_adquisicion: e.target.value })}
             />
@@ -244,7 +273,7 @@ export default function Index() {
             <input
               type="number"
               step="0.01"
-              className="w-full border px-3 py-2 rounded"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
               value={form.precio_venta}
               onChange={(e) => setForm({ ...form, precio_venta: e.target.value })}
             />
@@ -255,7 +284,7 @@ export default function Index() {
           <div>
             <label className="block mb-1 font-semibold">Proveedor</label>
             <select
-              className="w-full border px-3 py-2 rounded"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
               value={form.proveedor_id}
               onChange={(e) => setForm({ ...form, proveedor_id: e.target.value })}
             >
@@ -275,6 +304,7 @@ export default function Index() {
           </div>
         </form>
       </Modal>
+
       {/* Modal de Visualización de Producto */}
       <Modal title="Detalle del Producto" isOpen={showViewModal} onClose={closeViewModal}>
         {viewProduct ? (

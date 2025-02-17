@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, usePage, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/Components/Modal';
@@ -8,13 +8,40 @@ export default function Index({ auth, ventas, clientes, productos }) {
   const [clientErrors, setClientErrors] = useState({});
   const [showModal, setShowModal] = useState(false);
 
-  // Estado del formulario de venta:
+  // Estado del formulario de venta
   const [form, setForm] = useState({
     id: null,
     cliente_id: '',
     productos: [],
   });
 
+  // Estado para la búsqueda
+  const [search, setSearch] = useState('');
+  const [filteredVentas, setFilteredVentas] = useState(ventas.data || []);
+
+  // Actualiza la lista filtrada cuando cambie el input o los datos
+  useEffect(() => {
+    const term = search.toLowerCase();
+    const filtered = (ventas.data || []).filter((v) => {
+      const idMatch = v.id.toString().includes(term);
+      const clienteMatch =
+        v.cliente && v.cliente.nombre.toLowerCase().includes(term);
+      const productosMatch =
+        v.detalles &&
+        v.detalles.some((det) => {
+          const prodName = det.producto
+            ? det.producto.nombre.toLowerCase()
+            : det.producto_nombre
+            ? det.producto_nombre.toLowerCase()
+            : '';
+          return prodName.includes(term);
+        });
+      return idMatch || clienteMatch || productosMatch;
+    });
+    setFilteredVentas(filtered);
+  }, [search, ventas.data]);
+
+  // Funciones para abrir y cerrar el modal de crear/editar venta
   const openCreate = () => {
     setForm({ id: null, cliente_id: '', productos: [] });
     setClientErrors({});
@@ -23,6 +50,7 @@ export default function Index({ auth, ventas, clientes, productos }) {
 
   const closeModal = () => setShowModal(false);
 
+  // Manejo de la lista de productos en el formulario
   const addItem = () => {
     if (form.productos.length < productos.length) {
       setForm({
@@ -44,6 +72,7 @@ export default function Index({ auth, ventas, clientes, productos }) {
     setForm({ ...form, productos: newItems });
   };
 
+  // Validación y envío del formulario (validación incluida en handleSubmit)
   const handleSubmit = (e) => {
     e.preventDefault();
     let errorsLocal = {};
@@ -55,8 +84,13 @@ export default function Index({ auth, ventas, clientes, productos }) {
         if (!item.id) {
           errorsLocal[`productos_${index}_id`] = "Selecciona un producto.";
         }
-        if (!item.cantidad || isNaN(item.cantidad) || Number(item.cantidad) <= 0) {
-          errorsLocal[`productos_${index}_cantidad`] = "La cantidad debe ser mayor a 0.";
+        if (
+          !item.cantidad ||
+          isNaN(item.cantidad) ||
+          Number(item.cantidad) <= 0
+        ) {
+          errorsLocal[`productos_${index}_cantidad`] =
+            "La cantidad debe ser mayor a 0.";
         } else {
           const prod = productos.find((p) => p.id === Number(item.id));
           if (prod && Number(item.cantidad) > Number(prod.cantidad)) {
@@ -75,14 +109,14 @@ export default function Index({ auth, ventas, clientes, productos }) {
     }
 
     if (form.id) {
-      router.put(`/ventas/${form.id}`, form, { 
+      router.put(`/ventas/${form.id}`, form, {
         onSuccess: () => {
           setShowModal(false);
           router.visit('/ventas');
         },
       });
     } else {
-      router.post('/ventas', form, { 
+      router.post('/ventas', form, {
         onSuccess: () => {
           setShowModal(false);
           router.visit('/ventas');
@@ -91,7 +125,7 @@ export default function Index({ auth, ventas, clientes, productos }) {
     }
   };
 
-  const ventasList = ventas?.data || [];
+  const ventasList = filteredVentas; // Se usa la lista filtrada
   const clientesList = clientes || [];
   const productosList = productos || [];
 
@@ -99,10 +133,18 @@ export default function Index({ auth, ventas, clientes, productos }) {
     <AuthenticatedLayout header={<h2 className="text-2xl font-bold text-gray-800">Ventas</h2>}>
       <Head title="Ventas" />
       <div className="p-6">
-        <div className="flex justify-end mb-6">
-          <button 
-            onClick={openCreate} 
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow"
+        {/* Barra de búsqueda moderna */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 space-y-4 md:space-y-0">
+          <input
+            type="text"
+            placeholder="Buscar por ID, Cliente o Producto..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full max-w-md border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={openCreate}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow mt-2 md:mt-0"
           >
             Registrar Venta
           </button>
@@ -141,9 +183,12 @@ export default function Index({ auth, ventas, clientes, productos }) {
         </div>
         {/* Paginación */}
         {ventas.links && Array.isArray(ventas.links) && (
-          <div className="mt-4 flex justify-center space-x-2">
+          <div className="mt-6 flex justify-center space-x-2">
             {ventas.links.map((link, index) => (
-              <span key={index} className={`${link.active ? 'font-bold text-blue-600' : 'text-gray-600'} px-3 py-1 border rounded hover:bg-gray-100`}>
+              <span
+                key={index}
+                className={`${link.active ? 'font-bold text-blue-600' : 'text-gray-600'} px-3 py-1 border rounded hover:bg-gray-100`}
+              >
                 {link.url ? (
                   <Link href={link.url} dangerouslySetInnerHTML={{ __html: link.label }} />
                 ) : (
@@ -165,10 +210,14 @@ export default function Index({ auth, ventas, clientes, productos }) {
             >
               <option value="">-- Seleccionar Cliente (Opcional) --</option>
               {clientesList.map((c) => (
-                <option key={c.id} value={c.id}>{c.nombre}</option>
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
               ))}
             </select>
-            {errors.cliente_id && <div className="text-red-500 text-sm mt-1">{errors.cliente_id}</div>}
+            {errors.cliente_id && (
+              <div className="text-red-500 text-sm mt-1">{errors.cliente_id}</div>
+            )}
           </div>
           <div className="border p-3 rounded space-y-3">
             <button
@@ -194,10 +243,14 @@ export default function Index({ auth, ventas, clientes, productos }) {
                       <option value="">-- Seleccionar Producto --</option>
                       {productosList
                         .filter((p) =>
-                          form.productos.every((it, i) => i === index || Number(it.id) !== p.id)
+                          form.productos.every(
+                            (it, i) => i === index || Number(it.id) !== p.id
+                          )
                         )
                         .map((p) => (
-                          <option key={p.id} value={p.id}>{p.nombre}</option>
+                          <option key={p.id} value={p.id}>
+                            {p.nombre}
+                          </option>
                         ))}
                     </select>
                     <button

@@ -7,15 +7,38 @@ export default function Index({ auth, lista, productos }) {
   const { errors } = usePage().props;
   const [clientErrors, setClientErrors] = useState({});
   const [showModal, setShowModal] = useState(false);
-
-  // Estado del formulario para agregar/editar un deseo
   const [form, setForm] = useState({
     id: null,
     producto_id: '',
     cantidad: '',
   });
+  const [search, setSearch] = useState('');
 
-  // Abre el modal para crear (o editar)
+  // Barra de búsqueda: filtra la lista por ID, Producto y Cantidad
+  const filteredList = (lista.data || []).filter((item) => {
+    const term = search.toLowerCase();
+    const idMatch = item.id.toString().includes(term);
+    const productoMatch = item.producto
+      ? item.producto.nombre.toLowerCase().includes(term)
+      : (item.producto_nombre || '').toLowerCase().includes(term);
+    const cantidadMatch = item.cantidad.toString().includes(term);
+    return idMatch || productoMatch || cantidadMatch;
+  });
+
+  // Extraemos los IDs de los productos ya en la lista
+  const existingProductIds = (lista.data || []).map(
+    (item) => (item.producto ? item.producto.id : item.producto_id)
+  );
+
+  // Filtramos los productos para el select:
+  // Si estamos editando, permitimos que se muestre el producto actualmente seleccionado
+  const availableProducts = productos.filter((p) => {
+    if (form.id && p.id === Number(form.producto_id)) {
+      return true;
+    }
+    return !existingProductIds.includes(p.id);
+  });
+
   const openCreate = () => {
     setForm({ id: null, producto_id: '', cantidad: '' });
     setClientErrors({});
@@ -27,7 +50,7 @@ export default function Index({ auth, lista, productos }) {
     if (item.producto && !item.producto.deleted_at) {
       setForm({
         id: item.id,
-        producto_id: item.producto.id,
+        producto_id: item.producto.id.toString(), // Convertir a string para el select
         cantidad: item.cantidad,
       });
       setClientErrors({});
@@ -37,7 +60,6 @@ export default function Index({ auth, lista, productos }) {
 
   const closeModal = () => setShowModal(false);
 
-  // Validación y envío del formulario en el handleSubmit
   const handleSubmit = (e) => {
     e.preventDefault();
     let errorsLocal = {};
@@ -70,20 +92,20 @@ export default function Index({ auth, lista, productos }) {
     }
   };
 
-  const dataList = lista?.data || [];
-
-  // Extraemos los IDs de los productos ya en la lista (si el producto existe en el registro, se toma su id; en caso contrario, se usa la propiedad producto_id)
-  const existingProductIds = dataList.map(item => (item.producto ? item.producto.id : item.producto_id));
-
-  // Filtramos los productos para que en el select solo se muestren aquellos que aún no estén en la lista
-  const availableProducts = productos.filter(p => !existingProductIds.includes(p.id));
-
   return (
     <AuthenticatedLayout header={<h2 className="font-semibold text-2xl text-gray-800">Lista de Deseos</h2>}>
       <Head title="Lista de Deseos" />
 
       <div className="p-6">
-        <div className="flex justify-end mb-6">
+        {/* Barra de búsqueda */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 space-y-4 md:space-y-0">
+          <input
+            type="text"
+            placeholder="Buscar por ID, Producto o Cantidad..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full max-w-md border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
           <button
             onClick={openCreate}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow"
@@ -103,7 +125,7 @@ export default function Index({ auth, lista, productos }) {
               </tr>
             </thead>
             <tbody>
-              {dataList.map(item => (
+              {filteredList.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-3 border-b text-sm text-gray-800">{item.id}</td>
                   <td className="px-6 py-3 border-b text-sm text-gray-800">
@@ -134,7 +156,12 @@ export default function Index({ auth, lista, productos }) {
                         Editar
                       </button>
                     )}
-                    <Link as="button" method="delete" href={`/lista-deseos/${item.id}`} className="text-red-500 hover:underline">
+                    <Link
+                      as="button"
+                      method="delete"
+                      href={`/lista-deseos/${item.id}`}
+                      className="text-red-500 hover:underline"
+                    >
                       Eliminar
                     </Link>
                   </td>
@@ -150,7 +177,7 @@ export default function Index({ auth, lista, productos }) {
             {lista.links.map((link, index) => (
               <span
                 key={index}
-                className={`${link.active ? 'font-bold text-blue-600' : 'text-gray-600'} px-3 py-1 border rounded hover:bg-gray-100`}
+                className={`px-3 py-1 border rounded hover:bg-gray-100 ${link.active ? 'font-bold text-blue-600' : 'text-gray-600'}`}
               >
                 {link.url ? (
                   <Link href={link.url} dangerouslySetInnerHTML={{ __html: link.label }} />
@@ -163,7 +190,6 @@ export default function Index({ auth, lista, productos }) {
         )}
       </div>
 
-      {/* Modal para Agregar/Editar Deseo */}
       <Modal title={form.id ? 'Editar Deseo' : 'Agregar Deseo'} isOpen={showModal} onClose={closeModal}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -174,7 +200,7 @@ export default function Index({ auth, lista, productos }) {
               onChange={(e) => setForm({ ...form, producto_id: e.target.value })}
             >
               <option value="">-- Seleccionar --</option>
-              {availableProducts.map(p => (
+              {availableProducts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre}
                 </option>

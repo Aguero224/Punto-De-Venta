@@ -12,8 +12,6 @@ class ClienteController extends Controller
 {
     public function index()
     {
-        // Cargamos todos los clientes + paginación
-        // e incluimos 'user' para ver email (si lo quisieras listar)
         $clientes = Cliente::with('user')->paginate(10);
 
         return Inertia::render('Clientes/Index', [
