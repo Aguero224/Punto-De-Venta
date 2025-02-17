@@ -94,7 +94,9 @@ class ClienteController extends Controller
     public function destroy($id)
     {
         $cliente = Cliente::findOrFail($id);
-        // SoftDelete, si así lo deseas
+        if ($cliente->user) {
+            $cliente->user->delete();
+        }
         $cliente->delete();
 
         return redirect()->route('clientes.index')->with('success', 'Cliente eliminado con éxito');

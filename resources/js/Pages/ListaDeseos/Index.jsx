@@ -6,34 +6,51 @@ import Modal from '@/Components/Modal';
 
 export default function Index({ auth, lista, productos }) {
   const { errors } = usePage().props;
+  const [clientErrors, setClientErrors] = useState({});
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     id: null,
     producto_id: '',
-    cantidad: 1,
+    cantidad: '',
   });
 
   const openCreate = () => {
-    setForm({ id: null, producto_id: '', cantidad: 1 });
+    setForm({ id: null, producto_id: '', cantidad: '' });
+    setClientErrors({});
     setShowModal(true);
   };
 
   const openEdit = (item) => {
-    // Solo permite editar si el producto aún existe
-    if (item.producto) {
+    // Permitimos editar solo si el producto aún existe y no está eliminado
+    if (item.producto && !item.producto.deleted_at) {
       setForm({
         id: item.id,
-        producto_id: item.producto.id, // o item.producto_id
+        producto_id: item.producto.id,
         cantidad: item.cantidad,
       });
+      setClientErrors({});
       setShowModal(true);
     }
   };
 
   const closeModal = () => setShowModal(false);
 
-  function handleSubmit(e) {
+  const handleSubmit = (e) => {
     e.preventDefault();
+    let errorsLocal = {};
+    if (!form.producto_id) {
+      errorsLocal.producto_id = "El producto es obligatorio.";
+    }
+    if (!form.cantidad || isNaN(form.cantidad) || Number(form.cantidad) <= 0) {
+      errorsLocal.cantidad = "La cantidad debe ser un número mayor a 0.";
+    }
+    if (Object.keys(errorsLocal).length > 0) {
+      setClientErrors(errorsLocal);
+      return;
+    } else {
+      setClientErrors({});
+    }
+
     const onSuccess = (page) => {
       if (Object.keys(page.props.errors).length === 0) {
         setShowModal(false);
@@ -46,27 +63,18 @@ export default function Index({ auth, lista, productos }) {
     } else {
       Inertia.post('/lista-deseos', form, { onSuccess, onError: () => {} });
     }
-  }
+  };
 
-  const dataList = lista?.data ?? [];
-  const productList = productos ?? [];
+  const dataList = lista?.data || [];
+  const productList = productos || [];
 
   return (
-    <AuthenticatedLayout
-      header={
-        <h2 className="font-semibold text-xl text-gray-800 leading-tight">
-          Lista de Deseos
-        </h2>
-      }
-    >
+    <AuthenticatedLayout header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Lista de Deseos</h2>}>
       <Head title="Lista de Deseos" />
 
       <div className="p-6">
         <div className="flex justify-end mb-4">
-          <button
-            className="bg-green-500 text-white px-4 py-2 rounded"
-            onClick={openCreate}
-          >
+          <button className="bg-green-500 text-white px-4 py-2 rounded" onClick={openCreate}>
             Agregar a Lista
           </button>
         </div>
@@ -88,35 +96,31 @@ export default function Index({ auth, lista, productos }) {
                   {item.producto ? (
                     <>
                       {item.producto.nombre}{' '}
-                      {Number(item.producto.cantidad) >= Number(item.cantidad) ? (
-                        <span className="text-green-500 text-sm">(En stock)</span>
+                      {item.producto.deleted_at ? (
+                        <span className="text-red-500 text-sm">(Este producto ya no esta en la tienda.)</span>
                       ) : (
-                        <span className="text-red-500 text-sm">(No hay stock de esa cantidad)</span>
+                        Number(item.producto.cantidad) >= Number(item.cantidad) ? (
+                          <span className="text-green-500 text-sm">(En stock)</span>
+                        ) : (
+                          <span className="text-red-500 text-sm">(No hay stock de esa cantidad)</span>
+                        )
                       )}
                     </>
                   ) : (
                     <>
-                      {item.producto_nombre || 'N/A'}{' '}
-                      <span className="text-red-500 text-sm">(Este producto se eliminó)</span>
+                      {item.producto_nombre ? item.producto_nombre : 'Producto eliminado'}{' '}
+                      <span className="text-red-500 text-sm">(Este producto ya no esta en la tienda.)</span>
                     </>
                   )}
                 </td>
                 <td className="border px-4 py-2">{item.cantidad}</td>
                 <td className="border px-4 py-2">
-                  {item.producto && (
-                    <button
-                      onClick={() => openEdit(item)}
-                      className="text-green-500 mr-2"
-                    >
+                  {item.producto && !item.producto.deleted_at && (
+                    <button onClick={() => openEdit(item)} className="text-green-500 mr-2">
                       Editar
                     </button>
                   )}
-                  <Link
-                    as="button"
-                    method="delete"
-                    href={`/lista-deseos/${item.id}`}
-                    className="text-red-500"
-                  >
+                  <Link as="button" method="delete" href={`/lista-deseos/${item.id}`} className="text-red-500">
                     Eliminar
                   </Link>
                 </td>
@@ -126,11 +130,7 @@ export default function Index({ auth, lista, productos }) {
         </table>
       </div>
 
-      <Modal
-        title={form.id ? 'Editar Deseo' : 'Agregar Deseo'}
-        isOpen={showModal}
-        onClose={closeModal}
-      >
+      <Modal title={form.id ? 'Editar Deseo' : 'Agregar Deseo'} isOpen={showModal} onClose={closeModal}>
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block mb-1">Producto</label>
@@ -146,8 +146,8 @@ export default function Index({ auth, lista, productos }) {
                 </option>
               ))}
             </select>
-            {errors.producto_id && (
-              <div className="text-red-600 text-sm">{errors.producto_id}</div>
+            {(clientErrors.producto_id || errors.producto_id) && (
+              <div className="text-red-600 text-sm">{clientErrors.producto_id || errors.producto_id}</div>
             )}
           </div>
 
@@ -160,8 +160,8 @@ export default function Index({ auth, lista, productos }) {
               value={form.cantidad}
               onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
             />
-            {errors.cantidad && (
-              <div className="text-red-600 text-sm">{errors.cantidad}</div>
+            {(clientErrors.cantidad || errors.cantidad) && (
+              <div className="text-red-600 text-sm">{clientErrors.cantidad || errors.cantidad}</div>
             )}
           </div>
 
