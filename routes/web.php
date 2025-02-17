@@ -50,3 +50,4 @@ Route::middleware(['auth'])->group(function () {
         return inertia('Dashboard');
     })->name('dashboard');
 });
+

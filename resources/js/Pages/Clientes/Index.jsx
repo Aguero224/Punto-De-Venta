@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { Inertia } from '@inertiajs/inertia';
+import { Head, usePage, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/Components/Modal';
 import axios from 'axios';
@@ -52,74 +51,6 @@ export default function Index({ auth, clientes }) {
 
   const closeModal = () => setShowModal(false);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    let errorsLocal = {};
-
-    // Validación de campos obligatorios (para creación, en edición algunos serán opcionales)
-    if (!form.nombre.trim()) {
-      errorsLocal.nombre = "El nombre es obligatorio.";
-    }
-    if (!form.direccion.trim()) {
-      errorsLocal.direccion = "La dirección es obligatoria.";
-    }
-    if (!form.telefono.trim()) {
-      errorsLocal.telefono = "El teléfono es obligatorio.";
-    } else if (!/^\d+$/.test(form.telefono)) {
-      errorsLocal.telefono = "El teléfono debe contener solo números.";
-    } else if (form.telefono.length < 10) {
-      errorsLocal.telefono = "El teléfono debe tener al menos 10 dígitos.";
-    } else if (form.telefono.length > 15) {
-      errorsLocal.telefono = "El teléfono no puede tener más de 15 dígitos.";
-    }
-
-    // Para creación: email y contraseña son obligatorios.
-    if (!form.id) {
-      if (!form.email.trim()) {
-        errorsLocal.email = "El email es obligatorio.";
-      }
-      if (!form.password.trim()) {
-        errorsLocal.password = "La contraseña es obligatoria.";
-      }
-      if (form.password !== form.password_confirmation) {
-        errorsLocal.password_confirmation = "Las contraseñas no coinciden.";
-      }
-    } else {
-      // Para edición: email y contraseña son opcionales.
-      // Si se ingresa contraseña, se debe confirmar.
-      if (form.password.trim() && form.password !== form.password_confirmation) {
-        errorsLocal.password_confirmation = "Las contraseñas no coinciden.";
-      }
-    }
-
-    if (Object.keys(errorsLocal).length > 0) {
-      setClientErrors(errorsLocal);
-      return;
-    } else {
-      setClientErrors({});
-    }
-
-    if (form.id) {
-      Inertia.put(`/clientes/${form.id}`, form, {
-        onSuccess: (page) => {
-          if (Object.keys(page.props.errors).length === 0) {
-            setShowModal(false);
-            window.location.href = '/clientes';
-          }
-        },
-      });
-    } else {
-      Inertia.post('/clientes', form, {
-        onSuccess: (page) => {
-          if (Object.keys(page.props.errors).length === 0) {
-            setShowModal(false);
-            window.location.href = '/clientes';
-          }
-        },
-      });
-    }
-  };
-
   const openHistorialModal = (clientId) => {
     axios
       .get(`/clientes/${clientId}/historial`)
@@ -137,89 +68,278 @@ export default function Index({ auth, clientes }) {
     setHistorialData([]);
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    let errorsLocal = {};
+
+    // Validación de campos obligatorios
+    if (!form.nombre.trim()) {
+      errorsLocal.nombre = "El nombre es obligatorio.";
+    }
+    if (!form.direccion.trim()) {
+      errorsLocal.direccion = "La dirección es obligatoria.";
+    }
+    if (!form.telefono.trim()) {
+      errorsLocal.telefono = "El teléfono es obligatorio.";
+    } else if (!/^\d+$/.test(form.telefono)) {
+      errorsLocal.telefono = "El teléfono debe contener solo números.";
+    } else if (form.telefono.length < 10) {
+      errorsLocal.telefono = "El teléfono debe tener al menos 10 dígitos.";
+    } else if (form.telefono.length > 15) {
+      errorsLocal.telefono = "El teléfono no puede tener más de 15 dígitos.";
+    }
+    // Validación de email y password en creación (en edición son opcionales)
+    if (!form.id) {
+      if (!form.email.trim()) {
+        errorsLocal.email = "El email es obligatorio.";
+      }
+      if (!form.password.trim()) {
+        errorsLocal.password = "La contraseña es obligatoria.";
+      }
+      if (form.password !== form.password_confirmation) {
+        errorsLocal.password_confirmation = "Las contraseñas no coinciden.";
+      }
+    } else {
+      if (form.password.trim() && form.password !== form.password_confirmation) {
+        errorsLocal.password_confirmation = "Las contraseñas no coinciden.";
+      }
+    }
+
+    // Validación de nombre duplicado (excluyendo el actual en edición)
+    const allClients = clientes.data || [];
+    if (!form.id) {
+      const duplicateNombre = allClients.find(
+        (c) => c.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
+      );
+      if (duplicateNombre) {
+        errorsLocal.nombre = "Ya existe un cliente con este nombre.";
+      }
+      const duplicateEmail = allClients.find(
+        (c) => c.user && c.user.email.toLowerCase() === form.email.trim().toLowerCase()
+      );
+      if (duplicateEmail) {
+        errorsLocal.email = "El email ya está registrado, por favor use otro.";
+      }
+    } else {
+      const duplicateNombre = allClients.find(
+        (c) =>
+          c.id !== form.id &&
+          c.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
+      );
+      if (duplicateNombre) {
+        errorsLocal.nombre = "Ya existe un cliente con este nombre.";
+      }
+      if (form.email.trim()) {
+        const duplicateEmail = allClients.find(
+          (c) =>
+            c.id !== form.id &&
+            c.user &&
+            c.user.email.toLowerCase() === form.email.trim().toLowerCase()
+        );
+        if (duplicateEmail) {
+          errorsLocal.email = "El email ya está registrado, por favor use otro.";
+        }
+      }
+    }
+
+    if (Object.keys(errorsLocal).length > 0) {
+      setClientErrors(errorsLocal);
+      return;
+    } else {
+      setClientErrors({});
+    }
+
+    // Envío de datos con router
+    if (form.id) {
+      router.put(`/clientes/${form.id}`, form, {
+        onSuccess: (page) => {
+          if (Object.keys(page.props.errors).length === 0) {
+            setShowModal(false);
+            router.visit('/clientes');
+          }
+        },
+      });
+    } else {
+      router.post('/clientes', form, {
+        onSuccess: (page) => {
+          if (Object.keys(page.props.errors).length === 0) {
+            setShowModal(false);
+            router.visit('/clientes');
+          }
+        },
+      });
+    }
+  };
+
   const dataList = clientes?.data || [];
 
   return (
-    <AuthenticatedLayout header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Listado de Clientes</h2>}>
+    <AuthenticatedLayout header={<h2 className="text-2xl font-bold text-gray-800">Clientes</h2>}>
       <Head title="Clientes" />
       <div className="p-6">
-        <div className="flex justify-end mb-4">
-          <button className="bg-green-500 text-white px-4 py-2 rounded" onClick={openCreate}>Crear Cliente</button>
+        <div className="flex justify-end mb-6">
+          <button
+            onClick={openCreate}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition-colors"
+          >
+            Crear Cliente
+          </button>
         </div>
-        <table className="min-w-full border">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border px-4 py-2">ID</th>
-              <th className="border px-4 py-2">Nombre</th>
-              <th className="border px-4 py-2">Email (User)</th>
-              <th className="border px-4 py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dataList.map((cli) => (
-              <tr key={cli.id}>
-                <td className="border px-4 py-2">{cli.id}</td>
-                <td className="border px-4 py-2">{cli.nombre}</td>
-                <td className="border px-4 py-2">{cli.user ? cli.user.email : 'N/A'}</td>
-                <td className="border px-4 py-2">
-                  <button onClick={() => openEdit(cli)} className="text-green-500 mr-2">Editar</button>
-                  <Link as="button" method="delete" href={`/clientes/${cli.id}`} className="text-red-500 mr-2">Eliminar</Link>
-                  <button onClick={() => openHistorialModal(cli.id)} className="text-blue-500">Historial</button>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white rounded-lg shadow">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">ID</th>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">Nombre</th>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">Email (User)</th>
+                <th className="px-6 py-3 border-b text-center text-sm font-semibold text-gray-700">Acciones</th>
               </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {dataList.map((cli) => (
+                <tr key={cli.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{cli.id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{cli.nombre}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                    {cli.user ? cli.user.email : 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                    <button onClick={() => openEdit(cli)} className="text-green-500 hover:underline mr-2">
+                      Editar
+                    </button>
+                    <Link
+                      as="button"
+                      method="delete"
+                      href={`/clientes/${cli.id}`}
+                      className="text-red-500 hover:underline mr-2"
+                    >
+                      Eliminar
+                    </Link>
+                    <button onClick={() => openHistorialModal(cli.id)} className="text-blue-500 hover:underline">
+                      Historial
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Paginación */}
+        {clientes.links && Array.isArray(clientes.links) && (
+          <div className="mt-6 flex justify-center space-x-2">
+            {clientes.links.map((link, index) => (
+              <span
+                key={index}
+                className={`px-3 py-1 border rounded hover:bg-gray-100 ${link.active ? 'font-bold text-blue-600' : 'text-gray-600'}`}
+              >
+                {link.url ? (
+                  <Link href={link.url} dangerouslySetInnerHTML={{ __html: link.label }} />
+                ) : (
+                  <span dangerouslySetInnerHTML={{ __html: link.label }} />
+                )}
+              </span>
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
+
       {/* Modal para Crear/Editar Cliente */}
-      <Modal title={form.id ? 'Editar Cliente - Credenciales de usuario (Opcional)' : 'Crear Cliente'} isOpen={showModal} onClose={closeModal}>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block mb-1">Nombre</label>
-            <input type="text" className="border w-full" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
-            {(clientErrors.nombre || errors.nombre) && <div className="text-red-600 text-sm">{clientErrors.nombre || errors.nombre}</div>}
-          </div>
-          <div className="mb-4">
-            <label className="block mb-1">Dirección</label>
-            <input type="text" className="border w-full" value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} />
-            {(clientErrors.direccion || errors.direccion) && <div className="text-red-600 text-sm">{clientErrors.direccion || errors.direccion}</div>}
-          </div>
-          <div className="mb-4">
-            <label className="block mb-1">Teléfono</label>
+      <Modal
+        title={form.id ? 'Editar Cliente - Credenciales de usuario (Opcional)' : 'Crear Cliente'}
+        isOpen={showModal}
+        onClose={closeModal}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block mb-1 font-semibold">Nombre</label>
             <input
               type="text"
-              className="border w-full"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
+              value={form.nombre}
+              onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+            />
+            {(clientErrors.nombre || errors.nombre) && (
+              <p className="mt-1 text-sm text-red-500">{clientErrors.nombre || errors.nombre}</p>
+            )}
+          </div>
+          <div>
+            <label className="block mb-1 font-semibold">Dirección</label>
+            <input
+              type="text"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
+              value={form.direccion}
+              onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+            />
+            {(clientErrors.direccion || errors.direccion) && (
+              <p className="mt-1 text-sm text-red-500">{clientErrors.direccion || errors.direccion}</p>
+            )}
+          </div>
+          <div>
+            <label className="block mb-1 font-semibold">Teléfono</label>
+            <input
+              type="text"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
               value={form.telefono}
               onChange={(e) => {
-                // Permitir solo dígitos en el input
                 const val = e.target.value;
                 if (/^\d*$/.test(val)) {
                   setForm({ ...form, telefono: val });
                 }
               }}
             />
-            {(clientErrors.telefono || errors.telefono) && <div className="text-red-600 text-sm">{clientErrors.telefono || errors.telefono}</div>}
+            {(clientErrors.telefono || errors.telefono) && (
+              <p className="mt-1 text-sm text-red-500">{clientErrors.telefono || errors.telefono}</p>
+            )}
           </div>
-          <hr className="my-3" />
-          <h3 className="font-semibold mb-2">Credenciales de usuario {form.id ? "(Opcional)" : ""}</h3>
-          <div className="mb-4">
-            <label className="block mb-1">Email</label>
-            <input type="email" className="border w-full" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            {(clientErrors.email || errors.email) && <div className="text-red-600 text-sm">{clientErrors.email || errors.email}</div>}
+          <div>
+            <label className="block mb-1 font-semibold">Email</label>
+            <input
+              type="email"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+            {(clientErrors.email || errors.email) && (
+              <p className="mt-1 text-sm text-red-500">{clientErrors.email || errors.email}</p>
+            )}
           </div>
-          <div className="mb-4">
-            <label className="block mb-1">Password</label>
-            <input type="password" className="border w-full" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-            {(clientErrors.password || errors.password) && <div className="text-red-600 text-sm">{clientErrors.password || errors.password}</div>}
+          <div>
+            <label className="block mb-1 font-semibold">Password</label>
+            <input
+              type="password"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+            {(clientErrors.password || errors.password) && (
+              <p className="mt-1 text-sm text-red-500">{clientErrors.password || errors.password}</p>
+            )}
           </div>
-          <div className="mb-4">
-            <label className="block mb-1">Confirm Password</label>
-            <input type="password" className="border w-full" value={form.password_confirmation} onChange={(e) => setForm({ ...form, password_confirmation: e.target.value })} />
-            {(clientErrors.password_confirmation || errors.password_confirmation) && <div className="text-red-600 text-sm">{clientErrors.password_confirmation || errors.password_confirmation}</div>}
+          <div>
+            <label className="block mb-1 font-semibold">Confirm Password</label>
+            <input
+              type="password"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
+              value={form.password_confirmation}
+              onChange={(e) =>
+                setForm({ ...form, password_confirmation: e.target.value })
+              }
+            />
+            {(clientErrors.password_confirmation || errors.password_confirmation) && (
+              <p className="mt-1 text-sm text-red-500">
+                {clientErrors.password_confirmation || errors.password_confirmation}
+              </p>
+            )}
           </div>
-          <button type="submit" className="bg-blue-500 text-white px-4 py-2">Guardar</button>
+          <div className="flex justify-end">
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors">
+              {form.id ? 'Actualizar' : 'Guardar'}
+            </button>
+          </div>
         </form>
       </Modal>
+
       {/* Modal de Historial de Compras */}
       <Modal title="Historial de Compras" isOpen={showHistorial} onClose={closeHistorialModal}>
         {historialData && historialData.length > 0 ? (

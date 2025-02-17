@@ -14,6 +14,12 @@ createInertiaApp({
       `./Pages/${name}.jsx`,
       import.meta.glob('./Pages/**/*.jsx')
     ),
+  // Aseguramos también la propiedad resolveComponent
+  resolveComponent: (name) =>
+    resolvePageComponent(
+      `./Pages/${name}.jsx`,
+      import.meta.glob('./Pages/**/*.jsx')
+    ),
   setup({ el, App, props }) {
     createRoot(el).render(<App {...props} />);
   },

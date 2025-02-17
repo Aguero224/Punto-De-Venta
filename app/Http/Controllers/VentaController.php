@@ -73,7 +73,12 @@ class VentaController extends Controller
             $venta->update(['total' => $total]);
         });
 
-        return redirect()->route('ventas.index')->with('success', 'Venta realizada con éxito');
+        // Aquí debes redirigir con Inertia, no con `redirect()`
+    return Inertia::render('Ventas/Index', [
+        'ventas' => Venta::with(['cliente', 'detalles.producto'])->paginate(10),
+        'clientes' => Cliente::all(),
+        'productos' => Producto::where('cantidad', '>', 0)->get(),
+    ]);
     }
 
     public function show($id)

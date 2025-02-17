@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Head, usePage, Link } from '@inertiajs/react';
-import { Inertia } from '@inertiajs/inertia';
+import { Head, usePage, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/Components/Modal';
 
@@ -10,14 +9,12 @@ export default function Index({ auth, ventas, clientes, productos }) {
   const [showModal, setShowModal] = useState(false);
 
   // Estado del formulario de venta:
-  // cliente_id es opcional; productos es un array de { id, cantidad }
   const [form, setForm] = useState({
     id: null,
     cliente_id: '',
     productos: [],
   });
 
-  // Abre el modal para crear (o editar) venta
   const openCreate = () => {
     setForm({ id: null, cliente_id: '', productos: [] });
     setClientErrors({});
@@ -26,9 +23,7 @@ export default function Index({ auth, ventas, clientes, productos }) {
 
   const closeModal = () => setShowModal(false);
 
-  // Agrega una nueva fila para un producto
   const addItem = () => {
-    // Sólo permitir agregar si aún quedan productos no seleccionados
     if (form.productos.length < productos.length) {
       setForm({
         ...form,
@@ -37,13 +32,11 @@ export default function Index({ auth, ventas, clientes, productos }) {
     }
   };
 
-  // Remueve una fila de producto según el índice
   const removeItem = (index) => {
     const newItems = form.productos.filter((_, i) => i !== index);
     setForm({ ...form, productos: newItems });
   };
 
-  // Maneja el cambio en cada fila (producto y cantidad)
   const handleItemChange = (index, field, value) => {
     const newItems = form.productos.map((item, i) =>
       i === index ? { ...item, [field]: value } : item
@@ -51,8 +44,8 @@ export default function Index({ auth, ventas, clientes, productos }) {
     setForm({ ...form, productos: newItems });
   };
 
-  // Función de validación local del formulario de venta
-  const validateVentaForm = () => {
+  const handleSubmit = (e) => {
+    e.preventDefault();
     let errorsLocal = {};
 
     if (form.productos.length === 0) {
@@ -74,167 +67,172 @@ export default function Index({ auth, ventas, clientes, productos }) {
       });
     }
 
-    return errorsLocal;
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const validationErrors = validateVentaForm();
-    if (Object.keys(validationErrors).length > 0) {
-      setClientErrors(validationErrors);
+    if (Object.keys(errorsLocal).length > 0) {
+      setClientErrors(errorsLocal);
       return;
     } else {
       setClientErrors({});
     }
 
     if (form.id) {
-      Inertia.put(`/ventas/${form.id}`, form, {
+      router.put(`/ventas/${form.id}`, form, { 
         onSuccess: () => {
           setShowModal(false);
-          window.location.href = '/ventas';
+          router.visit('/ventas');
         },
       });
     } else {
-      Inertia.post('/ventas', form, {
+      router.post('/ventas', form, { 
         onSuccess: () => {
           setShowModal(false);
-          window.location.href = '/ventas';
+          router.visit('/ventas');
         },
       });
     }
   };
 
-  // Listados
   const ventasList = ventas?.data || [];
   const clientesList = clientes || [];
   const productosList = productos || [];
 
   return (
-    <AuthenticatedLayout header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Ventas</h2>}>
+    <AuthenticatedLayout header={<h2 className="text-2xl font-bold text-gray-800">Ventas</h2>}>
       <Head title="Ventas" />
       <div className="p-6">
-        <div className="flex justify-end mb-4">
-          <button onClick={openCreate} className="bg-green-500 text-white px-4 py-2">
+        <div className="flex justify-end mb-6">
+          <button 
+            onClick={openCreate} 
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow"
+          >
             Registrar Venta
           </button>
         </div>
-        <table className="min-w-full border">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border px-4 py-2">ID</th>
-              <th className="border px-4 py-2">Cliente</th>
-              <th className="border px-4 py-2">Productos</th>
-              <th className="border px-4 py-2">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ventasList.map((v) => (
-              <tr key={v.id}>
-                <td className="border px-4 py-2">{v.id}</td>
-                <td className="border px-4 py-2">
-                  {v.cliente ? v.cliente.nombre : 'Venta sin cliente'}
-                </td>
-                <td className="border px-4 py-2">
-                  {v.detalles?.map((det) => (
-                    <div key={det.id}>
-                      {det.producto
-                        ? `${det.producto.nombre} (x${det.cantidad})`
-                        : `${det.producto_nombre || 'N/A'} (x${det.cantidad})`}
-                    </div>
-                  ))}
-                </td>
-                <td className="border px-4 py-2">{v.total}</td>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white rounded-lg shadow">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">ID</th>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">Cliente</th>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">Productos</th>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">Total</th>
               </tr>
+            </thead>
+            <tbody>
+              {ventasList.map((v) => (
+                <tr key={v.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-3 border-b text-sm text-gray-800">{v.id}</td>
+                  <td className="px-6 py-3 border-b text-sm text-gray-800">
+                    {v.cliente ? v.cliente.nombre : 'Venta sin cliente'}
+                  </td>
+                  <td className="px-6 py-3 border-b text-sm text-gray-800">
+                    {v.detalles?.map((det) => (
+                      <div key={det.id}>
+                        {det.producto
+                          ? `${det.producto.nombre} (x${det.cantidad})`
+                          : `${det.producto_nombre || 'N/A'} (x${det.cantidad})`}
+                      </div>
+                    ))}
+                  </td>
+                  <td className="px-6 py-3 border-b text-sm text-gray-800">{v.total}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {/* Paginación */}
+        {ventas.links && Array.isArray(ventas.links) && (
+          <div className="mt-4 flex justify-center space-x-2">
+            {ventas.links.map((link, index) => (
+              <span key={index} className={`${link.active ? 'font-bold text-blue-600' : 'text-gray-600'} px-3 py-1 border rounded hover:bg-gray-100`}>
+                {link.url ? (
+                  <Link href={link.url} dangerouslySetInnerHTML={{ __html: link.label }} />
+                ) : (
+                  <span dangerouslySetInnerHTML={{ __html: link.label }} />
+                )}
+              </span>
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
       <Modal title={form.id ? 'Editar Venta' : 'Registrar Venta'} isOpen={showModal} onClose={closeModal}>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block mb-1">Cliente</label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block mb-1 font-semibold">Cliente</label>
             <select
-              className="border w-full"
+              className="w-full border px-3 py-2 rounded"
               value={form.cliente_id}
               onChange={(e) => setForm({ ...form, cliente_id: e.target.value })}
             >
               <option value="">-- Seleccionar Cliente (Opcional) --</option>
               {clientesList.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
+                <option key={c.id} value={c.id}>{c.nombre}</option>
               ))}
             </select>
-            {errors.cliente_id && <div className="text-red-600 text-sm">{errors.cliente_id}</div>}
+            {errors.cliente_id && <div className="text-red-500 text-sm mt-1">{errors.cliente_id}</div>}
           </div>
-          <div className="mb-4 border p-2">
+          <div className="border p-3 rounded space-y-3">
             <button
               type="button"
               onClick={addItem}
-              className="bg-blue-500 text-white px-2 py-1"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
               disabled={form.productos.length >= productosList.length}
             >
               + Agregar Producto
             </button>
             {form.productos.length === 0 && (
-              <div className="text-red-600 text-sm">Debes agregar al menos un producto.</div>
+              <div className="text-red-500 text-sm">Debes agregar al menos un producto.</div>
             )}
-            {/* Si hay más de 4 filas, se aplica scroll */}
             <div className={form.productos.length > 4 ? "max-h-60 overflow-y-auto" : ""}>
               {form.productos.map((item, index) => (
-                <div key={index} className="flex flex-col space-y-1 mt-2">
+                <div key={index} className="flex flex-col space-y-1">
                   <div className="flex items-center space-x-2">
                     <select
-                      className="border"
+                      className="border px-2 py-1 rounded"
                       value={item.id}
                       onChange={(e) => handleItemChange(index, 'id', e.target.value)}
                     >
                       <option value="">-- Seleccionar Producto --</option>
                       {productosList
-                        .filter(
-                          (p) =>
-                            // Permitir si este producto ya está seleccionado en la fila actual o no se ha seleccionado en otra fila
-                            form.productos.every((it, i) => i === index || Number(it.id) !== p.id)
+                        .filter((p) =>
+                          form.productos.every((it, i) => i === index || Number(it.id) !== p.id)
                         )
                         .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nombre}
-                          </option>
+                          <option key={p.id} value={p.id}>{p.nombre}</option>
                         ))}
                     </select>
                     <button
                       type="button"
                       onClick={() => removeItem(index)}
-                      className="bg-red-500 text-white px-2 py-1 text-xs"
+                      className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 text-xs rounded"
                     >
                       Eliminar
                     </button>
                   </div>
                   {clientErrors[`productos_${index}_id`] && (
-                    <div className="text-red-600 text-sm">
-                      {clientErrors[`productos_${index}_id`]}
-                    </div>
+                    <div className="text-red-500 text-sm">{clientErrors[`productos_${index}_id`]}</div>
                   )}
                   <input
                     type="number"
                     min="1"
-                    className="border w-20"
+                    className="border px-2 py-1 rounded w-24"
                     value={item.cantidad}
                     onChange={(e) => handleItemChange(index, 'cantidad', e.target.value)}
                   />
                   {clientErrors[`productos_${index}_cantidad`] && (
-                    <div className="text-red-600 text-sm">
-                      {clientErrors[`productos_${index}_cantidad`]}
-                    </div>
+                    <div className="text-red-500 text-sm">{clientErrors[`productos_${index}_cantidad`]}</div>
                   )}
                 </div>
               ))}
             </div>
-            {errors.productos && <div className="text-red-600 text-sm">{errors.productos}</div>}
+            {errors.productos && (
+              <div className="text-red-500 text-sm">{errors.productos}</div>
+            )}
           </div>
-          <button type="submit" className="bg-blue-500 text-white px-4 py-2">
-            Guardar
-          </button>
+          <div className="flex justify-end">
+            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+              Guardar
+            </button>
+          </div>
         </form>
       </Modal>
     </AuthenticatedLayout>

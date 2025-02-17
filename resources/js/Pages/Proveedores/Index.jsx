@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { Inertia } from '@inertiajs/inertia';
+import { Head, usePage, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/Components/Modal';
 
@@ -44,6 +43,7 @@ export default function Index() {
     e.preventDefault();
     let errorsLocal = {};
 
+    // Validaciones obligatorias
     if (!form.nombre.trim()) {
       errorsLocal.nombre = "El nombre es obligatorio.";
     }
@@ -60,6 +60,24 @@ export default function Index() {
       errorsLocal.telefono = "El teléfono no puede tener más de 15 dígitos.";
     }
 
+    // Validación de nombre duplicado
+    const allProviders = proveedores.data || [];
+    if (!form.id) { // En creación
+      const duplicate = allProviders.find(
+        (p) => p.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
+      );
+      if (duplicate) {
+        errorsLocal.nombre = "El proveedor con este nombre ya existe.";
+      }
+    } else { // En edición
+      const duplicate = allProviders.find(
+        (p) => p.id !== form.id && p.nombre.toLowerCase() === form.nombre.trim().toLowerCase()
+      );
+      if (duplicate) {
+        errorsLocal.nombre = "El proveedor con este nombre ya existe.";
+      }
+    }
+
     if (Object.keys(errorsLocal).length > 0) {
       setClientErrors(errorsLocal);
       return;
@@ -67,22 +85,23 @@ export default function Index() {
       setClientErrors({});
     }
 
+    // Envío de datos: actualización o creación
     if (form.id) {
-      Inertia.put(`/proveedores/${form.id}`, form, {
+      router.put(`/proveedores/${form.id}`, form, {
         onSuccess: (page) => {
           if (Object.keys(page.props.errors).length === 0) {
             setShowModal(false);
-            window.location.href = '/proveedores';
+            router.visit('/proveedores');
           }
         },
         onError: () => {},
       });
     } else {
-      Inertia.post('/proveedores', form, {
+      router.post('/proveedores', form, {
         onSuccess: (page) => {
           if (Object.keys(page.props.errors).length === 0) {
             setShowModal(false);
-            window.location.href = '/proveedores';
+            router.visit('/proveedores');
           }
         },
         onError: () => {},
@@ -93,101 +112,112 @@ export default function Index() {
   const dataList = proveedores?.data || [];
 
   return (
-    <AuthenticatedLayout
-      header={
-        <h2 className="font-semibold text-xl text-gray-800 leading-tight">Proveedores</h2>
-      }
-    >
+    <AuthenticatedLayout header={<h2 className="font-semibold text-2xl text-gray-800 leading-tight">Proveedores</h2>}>
       <Head title="Proveedores" />
 
       <div className="p-6">
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end mb-6">
           <button
             onClick={openCreate}
-            className="bg-green-500 text-white px-4 py-2 rounded"
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition-colors"
           >
             Crear Proveedor
           </button>
         </div>
 
-        <table className="min-w-full border">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border px-4 py-2">ID</th>
-              <th className="border px-4 py-2">Nombre</th>
-              <th className="border px-4 py-2">Dirección</th>
-              <th className="border px-4 py-2">Teléfono</th>
-              <th className="border px-4 py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dataList.map((prov) => (
-              <tr key={prov.id}>
-                <td className="border px-4 py-2">{prov.id}</td>
-                <td className="border px-4 py-2">{prov.nombre}</td>
-                <td className="border px-4 py-2">{prov.direccion}</td>
-                <td className="border px-4 py-2">{prov.telefono}</td>
-                <td className="border px-4 py-2">
-                  <button onClick={() => openEdit(prov)} className="text-green-500 mr-2">
-                    Editar
-                  </button>
-                  <Link
-                    as="button"
-                    method="delete"
-                    href={`/proveedores/${prov.id}`}
-                    className="text-red-500"
-                  >
-                    Eliminar
-                  </Link>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white rounded-lg shadow">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">ID</th>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">Nombre</th>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">Dirección</th>
+                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">Teléfono</th>
+                <th className="px-6 py-3 border-b text-center text-sm font-semibold text-gray-700">Acciones</th>
               </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {dataList.map((prov) => (
+                <tr key={prov.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{prov.id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{prov.nombre}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{prov.direccion}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{prov.telefono}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                    <button onClick={() => openEdit(prov)} className="text-green-500 hover:underline mr-2">
+                      Editar
+                    </button>
+                    <Link
+                      as="button"
+                      method="delete"
+                      href={`/proveedores/${prov.id}`}
+                      className="text-red-500 hover:underline"
+                    >
+                      Eliminar
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Paginación */}
+        {proveedores.links && Array.isArray(proveedores.links) && (
+          <div className="mt-6 flex justify-center space-x-2">
+            {proveedores.links.map((link, index) => (
+              <span
+                key={index}
+                className={`px-3 py-1 border rounded hover:bg-gray-100 ${link.active ? 'font-bold text-blue-600' : 'text-gray-600'}`}
+              >
+                {link.url ? (
+                  <Link href={link.url} dangerouslySetInnerHTML={{ __html: link.label }} />
+                ) : (
+                  <span dangerouslySetInnerHTML={{ __html: link.label }} />
+                )}
+              </span>
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
 
-      <Modal
-        title={form.id ? 'Editar Proveedor' : 'Crear Proveedor'}
-        isOpen={showModal}
-        onClose={closeModal}
-      >
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block mb-1">Nombre</label>
+      <Modal title={form.id ? 'Editar Proveedor' : 'Crear Proveedor'} isOpen={showModal} onClose={closeModal}>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block mb-1 font-semibold">Nombre</label>
             <input
               type="text"
-              className="border w-full"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             />
             {(clientErrors.nombre || errors.nombre) && (
-              <div className="text-red-600 text-sm">
+              <p className="mt-1 text-sm text-red-500">
                 {clientErrors.nombre || errors.nombre}
-              </div>
+              </p>
             )}
           </div>
-          <div className="mb-4">
-            <label className="block mb-1">Dirección</label>
+          <div>
+            <label className="block mb-1 font-semibold">Dirección</label>
             <input
               type="text"
-              className="border w-full"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
               value={form.direccion}
               onChange={(e) => setForm({ ...form, direccion: e.target.value })}
             />
             {(clientErrors.direccion || errors.direccion) && (
-              <div className="text-red-600 text-sm">
+              <p className="mt-1 text-sm text-red-500">
                 {clientErrors.direccion || errors.direccion}
-              </div>
+              </p>
             )}
           </div>
-          <div className="mb-4">
-            <label className="block mb-1">Teléfono</label>
+          <div>
+            <label className="block mb-1 font-semibold">Teléfono</label>
             <input
               type="text"
-              className="border w-full"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring focus:border-blue-300"
               value={form.telefono}
               onChange={(e) => {
-                // Permitir solo dígitos
                 const val = e.target.value;
                 if (/^\d*$/.test(val)) {
                   setForm({ ...form, telefono: val });
@@ -195,14 +225,16 @@ export default function Index() {
               }}
             />
             {(clientErrors.telefono || errors.telefono) && (
-              <div className="text-red-600 text-sm">
+              <p className="mt-1 text-sm text-red-500">
                 {clientErrors.telefono || errors.telefono}
-              </div>
+              </p>
             )}
           </div>
-          <button type="submit" className="bg-blue-500 text-white px-4 py-2">
-            Guardar
-          </button>
+          <div className="flex justify-end">
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors">
+              {form.id ? 'Actualizar' : 'Guardar'}
+            </button>
+          </div>
         </form>
       </Modal>
     </AuthenticatedLayout>
